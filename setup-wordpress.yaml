@@ -1,0 +1,129 @@
+on:
+  workflow_call:
+    inputs:
+      php-version:
+        required: true
+        type: string
+      php-ini-values:
+        required: false
+        type: string
+      wp-version:
+        required: false
+        type: string
+        default: "latest"
+      wp-abspath:
+        required: false
+        type: string
+        default: "/var/www/html"
+      wp-url:
+        required: false
+        type: string
+        default: "http://localhost/"  # Must be ends with "/".
+      wp-username:
+        required: false
+        type: string
+        default: "admin"
+      wp-password:
+        required: false
+        type: string
+        default: "password"
+      wp-language:
+        required: false
+        type: string
+        default: "en_US"
+jobs:
+  setup-wordpress:
+    runs-on: ubuntu-24.04
+    steps:
+      # todo: Problem with `ubuntu-24.04`'s default PHP (8.3) 
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.php-version }}
+          ini-values: ${{ inputs.php-ini-values }}
+        env:
+          update: "true"
+
+      # - run: cat /etc/apache2/sites-available/000-default.conf
+      # - run: cat /etc/apache2/sites-available/default-ssl.conf
+      # - run: sudo ls -laR /etc/ssl/certs
+      # - run: cat /etc/ssl/certs/ssl-cert-snakeoil.pem
+      # - run: sudo cat /etc/ssl/private/ssl-cert-snakeoil.key
+
+      - name: Configure Apache
+        run: |
+          sudo systemctl start apache2
+          sudo a2enmod proxy_fcgi setenvif rewrite ssl
+          sudo a2enconf php${{ inputs.php-version }}-fpm
+          sudo a2ensite default-ssl
+          cat <<EOF | sudo tee /etc/apache2/conf-available/wordpress.conf
+          <Directory ${{ inputs.wp-abspath }}>
+              AllowOverride All
+          </Directory>
+          EOF
+          sudo a2enconf wordpress
+          sudo systemctl reload apache2
+          sudo chown -R www-data:www-data /var/www
+          sudo chmod -R 755 /var/www
+          sudo rm -rf ${{ inputs.wp-abspath }}/*
+        continue-on-error: true
+      - name: Apache bootlogs
+        run: |
+          sudo systemctl status apache2
+          sudo journalctl -xeu apache2
+      - name: Check Apache is running
+        run: sudo systemctl is-active --quiet apache2
+
+      - name: Enable MySQL
+        run: sudo systemctl start mysql.service
+
+      # https://make.wordpress.org/cli/handbook/guides/installing/
+      - name: Install WP-CLI
+        run: |+
+          curl -s -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+          chmod +x wp-cli.phar
+          sudo mv wp-cli.phar /usr/local/bin/wp
+          wp --info
+
+      - name: Setup WordPress
+        run: |+
+          cat <<EOF | sudo tee .htaccess
+          # BEGIN WordPress
+          <IfModule mod_rewrite.c>
+          RewriteEngine On
+          RewriteBase /
+          RewriteRule ^index\.php$ - [L]
+          RewriteCond %{REQUEST_FILENAME} !-f
+          RewriteCond %{REQUEST_FILENAME} !-d
+          RewriteRule . /index.php [L]
+          </IfModule>
+          # END WordPress
+          EOF
+
+          sudo -u www-data wp core download --version=${{ inputs.wp-version }}
+          sudo -u www-data wp config create --dbname=wordpress --dbuser=root --dbpass=root
+          # sudo -u www-data wp config set WP_DEBUG true --raw
+          # sudo -u www-data wp config set WP_DEBUG_LOG true --raw
+          # sudo -u www-data wp config set WP_DEBUG_DISPLAY true --raw
+          # sudo -u www-data wp config set FORCE_SSL_ADMIN false --raw
+          sudo -u www-data wp config set AUTOMATIC_UPDATER_DISABLED true --raw
+          sudo -u www-data wp db create
+          sudo -u www-data wp core install --url=${{ inputs.wp-url }} --title=Test --admin_user=${{ inputs.wp-username }} --admin_password=${{ inputs.wp-password }} --admin_email=admin@wordpress.local --skip-email
+          sudo -u www-data wp rewrite flush --hard
+          sudo -u www-data wp language core install ${{ inputs.wp-language }} --activate
+          # sudo -u www-data wp site switch-language ${{ inputs.wp-language }}
+          sudo -u www-data wp theme install classic --activate
+        working-directory: ${{ inputs.wp-abspath }}
+
+      # Check.
+      - run: curl -sL ${{ inputs.wp-url }}
+        continue-on-error: true
+      - run: curl -sL ${{ inputs.wp-url }}wp-admin/
+        continue-on-error: true
+      - run: cat ./wp-content/debug.log
+        # continue-on-error: true
+        if: ${{ hashFiles('./wp-content/debug.log') != '' }}
+        working-directory: ${{ inputs.wp-abspath }}
+      - name: Check WordPress is working
+        run: |
+          curl -sL ${{ inputs.wp-url }} | grep -q "Hello world!"
+          curl -sL ${{ inputs.wp-url }}wp-admin/ | grep -q "loginform"
