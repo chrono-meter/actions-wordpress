@@ -64,7 +64,7 @@ runs:
         sudo chown -R www-data:www-data ${{ inputs.wp-abspath }}
         sudo chmod -R 755 ${{ inputs.wp-abspath }}
         sudo rm -rf ${{ inputs.wp-abspath }}/*
-      shell: bash -v
+      shell: bash -v {0}
       continue-on-error: true
     - name: Apache bootlogs
       run: |
@@ -75,7 +75,7 @@ runs:
         sudo ls -laR /etc/ssl/certs
         cat stat /etc/ssl/certs/ssl-cert-snakeoil.pem
         sudo stat /etc/ssl/private/ssl-cert-snakeoil.key
-      shell: bash -v
+      shell: bash -v {0}
       if: failure()
     - name: Check Apache is running
       run: sudo systemctl is-active --quiet apache2
@@ -92,7 +92,7 @@ runs:
         chmod +x wp-cli.phar
         sudo mv wp-cli.phar /usr/local/bin/wp
         wp --info
-      shell: bash -v
+      shell: bash -v {0}
 
     - name: Setup WordPress
       run: |+
@@ -122,19 +122,19 @@ runs:
         sudo -u www-data wp language core install ${{ inputs.wp-language }} --activate
         # sudo -u www-data wp site switch-language ${{ inputs.wp-language }}
         sudo -u www-data wp theme install classic --activate
-      shell: bash -v
+      shell: bash -v {0}
       working-directory: ${{ inputs.wp-abspath }}
 
     # Check.
     - run: curl -sL ${{ inputs.wp-url }}
-      shell: bash -v
+      shell: bash -v {0}
       continue-on-error: true
     - run: curl -sL ${{ inputs.wp-url }}wp-admin/
-      shell: bash -v
+      shell: bash -v {0}
       continue-on-error: true
     - run: cat ./wp-content/debug.log
       if: ${{ hashFiles('./wp-content/debug.log') != '' }}
-      shell: bash -v
+      shell: bash -v {0}
       working-directory: ${{ inputs.wp-abspath }}
     - name: Check WordPress is working
       run: |
