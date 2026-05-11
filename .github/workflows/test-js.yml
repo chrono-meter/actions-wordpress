@@ -1,0 +1,33 @@
+name: Test JavaScript
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node.js version to use
+        type: string
+        default: '20'
+      test-script:
+        description: npm script to run for testing (must be defined in package.json)
+        type: string
+        default: test
+
+jobs:
+  test-js:
+    name: JavaScript Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ inputs.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Run JavaScript tests
+        run: npm run ${{ inputs.test-script }}

@@ -1,0 +1,54 @@
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node.js version to use
+        type: string
+        default: '20'
+      build-script:
+        description: npm script to run for building assets (must be defined in package.json)
+        type: string
+        default: build
+      artifact-name:
+        description: Name to use for the build artifact
+        type: string
+        default: build
+      artifact-path:
+        description: Path of the directory to upload as a build artifact
+        type: string
+        default: build
+    outputs:
+      artifact-name:
+        description: Name of the uploaded build artifact
+        value: ${{ jobs.build.outputs.artifact-name }}
+
+jobs:
+  build:
+    name: Build Assets
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-name: ${{ inputs.artifact-name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ inputs.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build assets
+        run: npm run ${{ inputs.build-script }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.artifact-path }}
+          if-no-files-found: error

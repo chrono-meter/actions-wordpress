@@ -1,0 +1,59 @@
+name: Lint PHP
+
+on:
+  workflow_call:
+    inputs:
+      php-version:
+        description: PHP version to use for linting
+        type: string
+        default: '8.2'
+      phpcs-standard:
+        description: PHPCS standard to use (e.g. WordPress, WordPress-Core, WordPress-Extra)
+        type: string
+        default: WordPress
+      phpcs-extensions:
+        description: Comma-separated list of file extensions to check
+        type: string
+        default: php
+      phpcs-path:
+        description: Path or paths to run PHPCS against
+        type: string
+        default: '.'
+
+jobs:
+  phpcs:
+    name: PHPCS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.php-version }}
+          tools: cs2pr
+          coverage: none
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run PHPCS
+        run: >
+          ./vendor/bin/phpcs
+          --standard=${{ inputs.phpcs-standard }}
+          --extensions=${{ inputs.phpcs-extensions }}
+          --report=checkstyle
+          ${{ inputs.phpcs-path }}
+          | cs2pr

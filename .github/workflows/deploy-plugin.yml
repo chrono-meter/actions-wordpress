@@ -1,0 +1,56 @@
+name: Deploy WordPress Plugin
+
+on:
+  workflow_call:
+    inputs:
+      slug:
+        description: WordPress.org plugin slug (defaults to repository name)
+        type: string
+        default: ''
+      assets-dir:
+        description: Directory containing WordPress.org assets (banners, icons, screenshots)
+        type: string
+        default: .wordpress-org
+      build-dir:
+        description: >
+          Directory containing the built plugin files to deploy.
+          Leave empty to deploy the entire repository.
+        type: string
+        default: ''
+      node-version:
+        description: Node.js version to use when a build step is required
+        type: string
+        default: '20'
+      php-version:
+        description: PHP version to use when a build step is required
+        type: string
+        default: '8.2'
+      dry-run:
+        description: Perform a dry run without actually deploying
+        type: boolean
+        default: false
+    secrets:
+      svn-username:
+        description: WordPress.org SVN username
+        required: true
+      svn-password:
+        description: WordPress.org SVN password
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy to WordPress.org
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy plugin to WordPress.org
+        uses: 10up/action-wordpress-plugin-deploy@stable
+        env:
+          SVN_USERNAME: ${{ secrets.svn-username }}
+          SVN_PASSWORD: ${{ secrets.svn-password }}
+          SLUG: ${{ inputs.slug }}
+          ASSETS_DIR: ${{ inputs.assets-dir }}
+          BUILD_DIR: ${{ inputs.build-dir }}
+          DRY_RUN: ${{ inputs.dry-run }}
