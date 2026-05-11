@@ -1,5 +1,7 @@
 name: Setup WordPress
 
+description: Install PHP, Configure Apache and MySQL, Install WordPress...
+
 inputs:
   php-version:
     required: true
@@ -75,6 +77,7 @@ runs:
         sudo systemctl status apache2
         sudo journalctl -xeu apache2
       shell: bash
+      if: failure()
     - name: Check Apache is running
       run: sudo systemctl is-active --quiet apache2
       shell: bash
