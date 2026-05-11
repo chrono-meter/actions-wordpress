@@ -7,6 +7,7 @@ inputs:
   php-ini-values:
     required: false
     type: string
+    default: ""
   wp-version:
     required: false
     type: string
