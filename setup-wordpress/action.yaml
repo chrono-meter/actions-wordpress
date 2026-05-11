@@ -139,6 +139,6 @@ runs:
       working-directory: ${{ inputs.wp-abspath }}
     - name: Check WordPress is working
       run: |
-        curl -sL ${{ inputs.wp-url }} | grep -q "Hello world!"
-        curl -sL ${{ inputs.wp-url }}wp-admin/ | grep -q "loginform"
+        curl -sL ${{ inputs.wp-url }} | grep "Hello world!"
+        curl -sL ${{ inputs.wp-url }}wp-admin/ | grep "loginform"
       shell: bash
