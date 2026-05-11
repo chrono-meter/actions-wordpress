@@ -65,6 +65,8 @@ runs:
         sudo systemctl reload apache2
         sudo chown -R www-data:www-data /var/www
         sudo chmod -R 755 /var/www
+        sudo chown -R www-data:www-data ${{ inputs.wp-abspath }}
+        sudo chmod -R 755 ${{ inputs.wp-abspath }}
         sudo rm -rf ${{ inputs.wp-abspath }}/*
       shell: bash
       continue-on-error: true
