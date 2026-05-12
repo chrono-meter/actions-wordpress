@@ -6,8 +6,9 @@ on:
     inputs:
       php-versions:
         description: 'Target of PHP versions to test, as *JSON stringified* array, e.g. ["8.5", "8.4", "8.3"]. See https://www.php.net/supported-versions.php for supported versions.'
+        required: false
         type: string
-        required: true
+        default: '["latest"]'
 
       php-ini-values:
         description: 'Custom PHP INI values to set, as a string, e.g. "post_max_size=256M". See https://github.com/shivammathur/setup-php#ini-values-optional for specifications.'
@@ -22,13 +23,15 @@ on:
       # WordPress 6.2. is the first version that supports React v18.2.0.
       wp-versions:
         description: 'Target of WordPress versions to test, as *JSON stringified* array, e.g. ["latest", "6.0"]. See https://developer.wordpress.org/cli/commands/core/download/ for specifications.'
+        required: false
         type: string
-        required: true
+        default: '["latest"]'
 
       wp-languages:
         description: 'Target of languages to test, as *JSON stringified* array, e.g. ["ja", "en"]. See result of `wp language core list` command for specifications.'
+        required: false
         type: string
-        required: true
+        default: '["en_US"]'
 
       wp-abspath:
         description: 'Absolute path to the WordPress installation.'
