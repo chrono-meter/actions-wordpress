@@ -1,0 +1,239 @@
+name: CI
+
+
+on:
+  workflow_call:
+    inputs:
+      php-versions:
+        description: 'Target of PHP versions to test, as *JSON stringified* array, e.g. ["8.5", "8.4", "8.3"]. See https://www.php.net/supported-versions.php for supported versions.'
+        type: string
+        required: true
+
+      php-ini-values:
+        description: 'Custom PHP INI values to set, as a string, e.g. "post_max_size=256M". See https://github.com/shivammathur/setup-php#ini-values-optional for specifications.'
+        required: false
+        type: string
+        default: ""
+
+      # https://make.wordpress.org/hosting/handbook/compatibility/
+      # https://wordpress.org/documentation/article/wordpress-versions/
+      # https://developer.wordpress.org/cli/commands/core/download/
+      # WordPress 6.6. is the first version that supports React v18.3.1.
+      # WordPress 6.2. is the first version that supports React v18.2.0.
+      wp-versions:
+        description: 'Target of WordPress versions to test, as *JSON stringified* array, e.g. ["latest", "6.0"]. See https://developer.wordpress.org/cli/commands/core/download/ for specifications.'
+        type: string
+        required: true
+
+      wp-languages:
+        description: 'Target of languages to test, as *JSON stringified* array, e.g. ["ja", "en"]. See result of `wp language core list` command for specifications.'
+        type: string
+        required: true
+
+      wp-abspath:
+        description: 'Absolute path to the WordPress installation.'
+        required: false
+        type: string
+        default: "/var/www/html"
+
+      wp-url:
+        description: 'Base URL of the WordPress installation. Must be ends with "/".'
+        required: false
+        type: string
+        default: "http://localhost/"  # Must be ends with "/".
+
+      wp-username:
+        description: 'Administrator username for testing.'
+        required: false
+        type: string
+        default: "admin"
+
+      wp-password:
+        description: 'Administrator password for testing.'
+        required: false
+        type: string
+        default: "password"
+
+      test-timeout-minutes:
+        description: 'Timeout for test job, in minutes.'
+        required: false
+        type: number
+        default: 60
+
+      npm-version:
+        required: false
+        type: string
+        default: "lts/*"
+
+      build-php-version:
+        required: false
+        type: string
+        default: "latest"
+
+
+jobs:
+
+  cancel-previous-workflow-runs:
+    runs-on: ubuntu-24.04
+    # permissions: read-all
+    steps:
+      - uses: styfle/cancel-workflow-action@0.13.1
+        continue-on-error: true
+
+
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.npm-version }}
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.build-php-version }}
+        env:
+          update: "true"
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+      - name: Cache dependencies
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+      - run: npm run ci:build
+      - run: npx --yes @chrono-meter/wp-zip-package --source-directory=./ --output=./dist.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: ./dist.zip
+          archive: false
+          retention-days: 1
+
+
+  test:
+    needs: build
+    runs-on: ubuntu-24.04
+    # permissions: read-all
+    timeout-minutes: ${{ inputs.test-timeout-minutes }}
+
+    strategy:
+      matrix:
+        php-versions: ${{ fromJson(inputs.php-versions) }}
+        wp-versions: ${{ fromJson(inputs.wp-versions) }}
+        wp-languages: ${{ fromJson(inputs.wp-languages) }}
+
+    env:
+      php-ini-values: ${{ inputs.php-ini-values }}
+      WP_ABSPATH: ${{ inputs.wp-abspath }}
+      WP_BASE_URL: ${{ inputs.wp-url }}
+      WP_USERNAME: ${{ inputs.wp-username }}
+      WP_PASSWORD: ${{ inputs.wp-password }}
+      WP_CLI_ALLOW_ROOT: "true"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: chrono-meter/actions-wordpress/setup-wordpress@main
+        with:
+          php-version: ${{ matrix.php-versions }}
+          php-ini-values: ${{ env.php-ini-values }}
+          wp-version: ${{ matrix.wp-versions }}
+          wp-language: ${{ matrix.wp-languages }}
+          wp-abspath: ${{ env.WP_ABSPATH }}
+          wp-url: ${{ env.WP_BASE_URL }}
+          wp-username: ${{ env.WP_USERNAME }}
+          wp-password: ${{ env.WP_PASSWORD }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.npm-version }}
+
+      # - uses: actions/download-artifact@v8
+      #   with:
+      #     name: dist
+      #     skip-decompress: true
+
+      - name: Download artifact
+        uses: actions/github-script@v9
+        env:
+          ARTIFACT_NAME: "dist.zip"
+          FILENAME: "/tmp/dist.zip"
+        with:
+          # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#using-data-from-the-triggering-workflow
+          script: &download_script |+
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            console.dir(artifacts.data);
+
+            const matchArtifact = artifacts.data.artifacts.find((artifact) => {
+              return artifact.name == process.env.ARTIFACT_NAME;
+            });
+
+            // https://octokit.github.io/rest.js/v22/
+            // https://docs.github.com/en/rest/actions/artifacts#download-an-artifact
+            const download = await github.rest.actions.downloadArtifact({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              artifact_id: matchArtifact.id,
+              archive_format: 'zip',  // MUST be 'zip'
+            });
+            const fs = require('fs');
+            fs.writeFileSync(process.env.FILENAME, Buffer.from(download.data));
+
+      - run: unzip -t "/tmp/dist.zip"
+      - run: stat "/tmp/dist.zip"
+      # NOTE: WP-CLI's error messages are not very helpful, making it difficult to determine the cause of an error. Here, we use /tmp to avoid a permission error.
+      - run: sudo -u www-data wp plugin install "/tmp/dist.zip" --skip-plugins --skip-themes
+        working-directory: ${{ env.WP_ABSPATH }}
+
+      # https://playwright.dev/docs/ci-intro#setting-up-github-actions
+      - id: "run-tests"
+        name: Run tests
+        run: npm run ci:test
+        env:
+          CI: "true"
+        continue-on-error: true
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && hashFiles('playwright-report/**') != '' }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Raise error if tests failed
+        run: false
+        if: steps.run-tests.outcome == 'failure'
+
+
+  release:
+    needs: test
+    runs-on: ubuntu-24.04
+    # permissions:
+    #   contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: .git
+      # - uses: actions/download-artifact@v8
+      #   with:
+      #     name: dist
+      #     skip-decompress: true
+      - uses: actions/github-script@v9
+        env:
+          ARTIFACT_NAME: "dist.zip"
+          FILENAME: "/tmp/dist.zip"
+        with:
+          script: *download_script
+      - run: stat "/tmp/dist.zip"
+      - run: echo "PACKAGE_NAME=${GITHUB_REPOSITORY#*/}-${GITHUB_REF_NAME#v}" | tee --append $GITHUB_ENV
+      - run: mv /tmp/dist.zip ./${PACKAGE_NAME}.zip
+      - run: gh release create "${{github.ref_name}}" --generate-notes ./${PACKAGE_NAME}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
