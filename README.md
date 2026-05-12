@@ -1,1 +1,18 @@
-# actions-wordpress
+# `.github/workflows/auto-release.yaml`
+```yaml
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  main:
+    uses: chrono-meter/actions-wordpress/.github/workflows/ci-plugin.yaml@main
+    permissions:
+      contents: write
+      actions: write
+    with:
+      php-versions: '["8.5"]'
+      wp-versions: '["latest"]'
+      wp-languages: '["ja"]'
+```
