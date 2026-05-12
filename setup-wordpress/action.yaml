@@ -4,8 +4,9 @@ description: Install PHP, Configure Apache and MySQL, Install WordPress...
 
 inputs:
   php-version:
-    required: true
+    required: false
     type: string
+    default: ""
   php-ini-values:
     required: false
     type: string
@@ -39,7 +40,8 @@ runs:
   using: "composite"
   steps:
     # todo: Problem with `ubuntu-24.04`'s default PHP (8.3) 
-    - uses: shivammathur/setup-php@v2
+    - id: setup-php
+      uses: shivammathur/setup-php@v2
       with:
         php-version: ${{ inputs.php-version }}
         ini-values: ${{ inputs.php-ini-values }}
@@ -50,7 +52,7 @@ runs:
       run: |
         sudo systemctl start apache2
         sudo a2enmod proxy_fcgi setenvif rewrite ssl
-        sudo a2enconf php${{ inputs.php-version }}-fpm
+        sudo a2enconf php${{ steps.setup-php.outputs.php-version }}-fpm
         sudo a2ensite default-ssl
         cat <<EOF | sudo tee /etc/apache2/conf-available/wordpress.conf
         <Directory ${{ inputs.wp-abspath }}>

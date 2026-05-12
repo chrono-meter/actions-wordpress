@@ -68,7 +68,34 @@ on:
       build-php-version:
         required: false
         type: string
-        default: "latest"
+        default: ""
+
+      build-php-extensions:
+        required: false
+        type: string
+        default: ""
+
+      build-php-ini-values:
+        required: false
+        type: string
+        default: ""
+
+      build-php-tools:
+        required: false
+        type: string
+        default: ""
+
+      enable-build:
+        description: 'Whether to run the build step (execute `npm run ci:build`). If false, the build job will be skipped, and the test job will run immediately after the cancellation of previous workflow runs.'
+        required: false
+        type: boolean
+        default: true
+
+      enable-tests:
+        description: 'Whether to run tests. If false, the test job will be skipped, and the release job will run immediately after the build job.'
+        required: false
+        type: boolean
+        default: true
 
 
 jobs:
@@ -91,6 +118,9 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ inputs.build-php-version }}
+          extensions: ${{ inputs.build-php-extensions }}
+          ini-values: ${{ inputs.build-php-ini-values }}
+          tools: ${{ inputs.build-php-tools }}
         env:
           update: "true"
       - name: Get composer cache directory
@@ -103,6 +133,7 @@ jobs:
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: ${{ runner.os }}-composer-
       - run: npm run ci:build
+        if: ${{ inputs.enable-build }}
       - run: npx --yes @chrono-meter/wp-zip-package --source-directory=./ --output=./dist.zip
       - uses: actions/upload-artifact@v7
         with:
@@ -113,6 +144,7 @@ jobs:
 
 
   test:
+    if: ${{ inputs.enable-tests }}
     needs: build
     runs-on: ubuntu-24.04
     # permissions: read-all
