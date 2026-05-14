@@ -45,12 +45,12 @@ runs:
       with:
         php-version: ${{ inputs.php-version }}
         ini-values: ${{ inputs.php-ini-values }}
+        # todo `tools: wp-cli`, that place `wp` executable at "/usr/local/bin/wp".
       env:
         update: "true"
 
     - name: Configure Apache
       run: |
-        sudo systemctl start apache2
         sudo a2enmod proxy_fcgi setenvif rewrite ssl
         sudo a2enconf php${{ steps.setup-php.outputs.php-version }}-fpm
         sudo a2ensite default-ssl
@@ -60,7 +60,7 @@ runs:
         </Directory>
         EOF
         sudo a2enconf wordpress
-        sudo systemctl reload apache2
+        sudo systemctl start apache2
         sudo chown -R www-data:www-data /var/www
         sudo chmod -R 755 /var/www
         sudo chown -R www-data:www-data ${{ inputs.wp-abspath }}
@@ -82,6 +82,13 @@ runs:
     - name: Check Apache is running
       run: sudo systemctl is-active --quiet apache2
       shell: bash
+    - name: Check PHP-FPM is working
+      run: |+
+        echo '<?php echo chr(72).chr(101).chr(108).chr(108).chr(111).chr(32).chr(119).chr(111).chr(114).chr(108).chr(100).chr(33);' | sudo tee ${{ inputs.wp-abspath }}/test.php
+        curl -s ${{ inputs.wp-url }}/test.php | grep "Hello world!" > /dev/null
+        sudo rm ${{ inputs.wp-abspath }}/test.php
+      shell: bash
+      working-directory: ${{ inputs.wp-abspath }}
 
     - name: Enable MySQL
       run: sudo systemctl start mysql.service
@@ -98,48 +105,55 @@ runs:
 
     - name: Setup WordPress
       run: |+
-        cat <<EOF | sudo tee .htaccess
-        # BEGIN WordPress
-        <IfModule mod_rewrite.c>
-        RewriteEngine On
-        RewriteBase /
-        RewriteRule ^index\.php$ - [L]
-        RewriteCond %{REQUEST_FILENAME} !-f
-        RewriteCond %{REQUEST_FILENAME} !-d
-        RewriteRule . /index.php [L]
-        </IfModule>
-        # END WordPress
-        EOF
-
         sudo -u www-data wp core download --version=${{ inputs.wp-version }}
         sudo -u www-data wp config create --dbname=wordpress --dbuser=root --dbpass=root
-        # sudo -u www-data wp config set WP_DEBUG true --raw
-        # sudo -u www-data wp config set WP_DEBUG_LOG true --raw
-        # sudo -u www-data wp config set WP_DEBUG_DISPLAY true --raw
-        # sudo -u www-data wp config set FORCE_SSL_ADMIN false --raw
         sudo -u www-data wp config set AUTOMATIC_UPDATER_DISABLED true --raw
         sudo -u www-data wp db create
         sudo -u www-data wp core install --url=${{ inputs.wp-url }} --title=Test --admin_user=${{ inputs.wp-username }} --admin_password=${{ inputs.wp-password }} --admin_email=admin@wordpress.local --skip-email
-        sudo -u www-data wp rewrite flush --hard
         sudo -u www-data wp language core install ${{ inputs.wp-language }} --activate
-        # sudo -u www-data wp site switch-language ${{ inputs.wp-language }}
         sudo -u www-data wp theme install classic --activate
       shell: bash -v {0}
       working-directory: ${{ inputs.wp-abspath }}
 
-    # Check.
+    # Check by WP-CLI.
+    - name: Check WP-CLI can access WordPress
+      run: |
+        sudo -u www-data wp db check
+        sudo -u www-data wp core is-installed
+        sudo -u www-data wp core version
+      shell: bash -v {0}
+      working-directory: ${{ inputs.wp-abspath }}
+
+    # Dump.
     - run: curl -sL ${{ inputs.wp-url }}
       shell: bash -v {0}
       continue-on-error: true
     - run: curl -sL ${{ inputs.wp-url }}wp-admin/
       shell: bash -v {0}
       continue-on-error: true
-    - run: cat ./wp-content/debug.log
-      if: ${{ hashFiles('./wp-content/debug.log') != '' }}
-      shell: bash -v {0}
-      working-directory: ${{ inputs.wp-abspath }}
+
+    # Check.
     - name: Check WordPress is working
-      run: |
+      run: |+
         curl -sL ${{ inputs.wp-url }} | grep "Hello world!" > /dev/null
         curl -sL ${{ inputs.wp-url }}wp-admin/ | grep "loginform" > /dev/null
       shell: bash
+      continue-on-error: true
+    - run: |+
+        # Enable debug mode to get more error details.
+        sudo -u www-data wp config set WP_DEBUG true --raw
+        sudo -u www-data wp config set WP_DEBUG_LOG true --raw
+        sudo -u www-data wp config set WP_DEBUG_DISPLAY true --raw
+
+        # Refetch to trigger debug log.
+        curl -sL ${{ inputs.wp-url }}
+        curl -sL ${{ inputs.wp-url }}/wp-admin/
+
+        # Dump log
+        cat ./wp-content/debug.log
+
+        # Stop job with error.
+        false
+      if: ${{ failure() }}
+      shell: bash -v {0}
+      working-directory: ${{ inputs.wp-abspath }}
