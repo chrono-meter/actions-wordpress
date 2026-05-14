@@ -84,7 +84,7 @@ runs:
       shell: bash
     - name: Check PHP-FPM is working
       run: |+
-        echo '<?php echo chr(72).chr(101).chr(108).chr(108).chr(111).chr(32).chr(119).chr(111).chr(114).chr(108).chr(100).chr(33);' | sudo tee ${{ inputs.wp-abspath }}/test.php
+        echo "<?php echo chr(72).chr(101).chr(108).chr(108).chr(111).chr(32).chr(119).chr(111).chr(114).chr(108).chr(100).chr(33); ?>" | sudo tee ${{ inputs.wp-abspath }}/test.php
         curl -s ${{ inputs.wp-url }}/test.php | grep "Hello world!" > /dev/null
         sudo rm ${{ inputs.wp-abspath }}/test.php
       shell: bash
@@ -133,7 +133,8 @@ runs:
       continue-on-error: true
 
     # Check.
-    - name: Check WordPress is working
+    - id: is-wordpress-working
+      name: Check WordPress is working
       run: |+
         curl -sL ${{ inputs.wp-url }} | grep "Hello world!" > /dev/null
         curl -sL ${{ inputs.wp-url }}wp-admin/ | grep "loginform" > /dev/null
@@ -154,6 +155,6 @@ runs:
 
         # Stop job with error.
         false
-      if: ${{ failure() }}
+      if: ${{ steps.is-wordpress-working.outcome == 'failure' }}
       shell: bash -v {0}
       working-directory: ${{ inputs.wp-abspath }}
