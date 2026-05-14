@@ -185,11 +185,13 @@ jobs:
         with:
           node-version: ${{ inputs.npm-version }}
 
+      # todo: with `run-id` resolve the issue that `actions/download-artifact` fails with reusable workflows?
       # - uses: actions/download-artifact@v8
       #   with:
       #     name: dist
       #     skip-decompress: true
 
+      # `actions/download-artifact` fails with reusable workflows.
       - name: Download artifact
         uses: actions/github-script@v9
         env:
@@ -249,10 +251,12 @@ jobs:
 
   release:
     needs: test
+    if: ${{ needs.test.result == 'success' || needs.test.result == 'skipped' }}
     runs-on: ubuntu-24.04
     # permissions:
     #   contents: write
     steps:
+      - run: false
       - uses: actions/checkout@v6
         with:
           sparse-checkout: .git
@@ -272,3 +276,4 @@ jobs:
       - run: gh release create "${{github.ref_name}}" --generate-notes ./${PACKAGE_NAME}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # github.run_number + github.run_attempt
