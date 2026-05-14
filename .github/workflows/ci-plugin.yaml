@@ -251,7 +251,7 @@ jobs:
 
   release:
     needs: test
-    if: ${{ !inputs.enable-tests || needs.test.result == 'success' }}
+    if: ${{ always() && (!inputs.enable-tests || needs.test.result == 'success') }}
     runs-on: ubuntu-24.04
     # permissions:
     #   contents: write
