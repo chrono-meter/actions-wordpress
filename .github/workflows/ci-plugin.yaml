@@ -255,17 +255,16 @@ jobs:
     runs-on: ubuntu-24.04
     # permissions:
     #   contents: write
+    env:
+      RELEASE_OPTION_P: ""
     steps:
-      - name: Debug - List workflow jobs
-        uses: actions/github-script@v9
+      - uses: actions/github-script@v9
         with:
           script: |+
-            const jobs = await github.rest.actions.listJobsForWorkflowRun({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.runId,
-            });
-            console.dir(jobs);
+            // if semver and (prerelease or version zero), add --prerelease option to gh release create command
+            if (/^v?\d+\.\d+\.\d+(-\S+)?$/.test(context.ref_name) || /^v?0\./.test(context.ref_name)) {
+              core.exportVariable('RELEASE_OPTION_P', '--prerelease');
+            }
       - uses: actions/checkout@v6
         with:
           sparse-checkout: .git
@@ -282,7 +281,8 @@ jobs:
       - run: stat "/tmp/dist.zip"
       - run: echo "PACKAGE_NAME=${GITHUB_REPOSITORY#*/}-${GITHUB_REF_NAME#v}" | tee --append $GITHUB_ENV
       - run: mv /tmp/dist.zip ./${PACKAGE_NAME}.zip
-      - run: gh release create "${{github.ref_name}}" --generate-notes ./${PACKAGE_NAME}.zip
+
+      # https://cli.github.com/manual/gh_release_create
+      - run: gh release create "${{github.ref_name}}" --generate-notes ${{ env.RELEASE_OPTION_P }} ./${PACKAGE_NAME}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # github.run_number + github.run_attempt
