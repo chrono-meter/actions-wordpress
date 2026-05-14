@@ -84,9 +84,9 @@ runs:
       shell: bash
     - name: Check PHP-FPM is working
       run: |+
-        echo "<?php echo chr(72).chr(101).chr(108).chr(108).chr(111).chr(32).chr(119).chr(111).chr(114).chr(108).chr(100).chr(33); ?>" | sudo tee ${{ inputs.wp-abspath }}/test.php
+        echo "<?php echo chr(72).chr(101).chr(108).chr(108).chr(111).chr(32).chr(119).chr(111).chr(114).chr(108).chr(100).chr(33); ?>" | sudo tee test.php
         curl -s ${{ inputs.wp-url }}/test.php | grep "Hello world!" > /dev/null
-        sudo rm ${{ inputs.wp-abspath }}/test.php
+        sudo rm test.php
       shell: bash
       working-directory: ${{ inputs.wp-abspath }}
 
