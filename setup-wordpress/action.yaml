@@ -49,6 +49,14 @@ runs:
       env:
         update: "true"
 
+    - name: Dump Apache configuration files
+      run: |
+        ls -laR /etc/apache2
+        sudo apache2ctl -M
+        sudo apache2ctl -S
+      shell: bash -e -v {0}
+      continue-on-error: true
+
     - name: Configure Apache
       run: |
         sudo a2enmod proxy_fcgi setenvif rewrite ssl
