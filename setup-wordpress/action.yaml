@@ -66,7 +66,7 @@ runs:
         sudo chown -R www-data:www-data ${{ inputs.wp-abspath }}
         sudo chmod -R 755 ${{ inputs.wp-abspath }}
         sudo rm -rf ${{ inputs.wp-abspath }}/*
-      shell: bash -v {0}
+      shell: bash -e -v {0}
       continue-on-error: true
     - name: Apache bootlogs
       run: |
@@ -77,25 +77,23 @@ runs:
         sudo ls -laR /etc/ssl/certs
         cat stat /etc/ssl/certs/ssl-cert-snakeoil.pem
         sudo stat /etc/ssl/private/ssl-cert-snakeoil.key
-      shell: bash -v {0}
+      shell: bash -e -v {0}
       if: failure()
     - name: Check Apache is running
       run: sudo systemctl is-active --quiet apache2
-      shell: bash
+      shell: bash -e -v {0}
     - name: Check PHP-FPM is working
       run: |+
-        sudo ls -la .
-        echo "<?php echo chr(72).chr(101).chr(108).chr(108).chr(111).chr(32).chr(119).chr(111).chr(114).chr(108).chr(100).chr(33); ?>" | sudo tee test.php || false
-        sudo ls -la .
         echo "<?php echo chr(72).chr(101).chr(108).chr(108).chr(111).chr(32).chr(119).chr(111).chr(114).chr(108).chr(100).chr(33); ?>" | sudo tee test.php
+        curl -s ${{ inputs.wp-url }}/test.php
         curl -s ${{ inputs.wp-url }}/test.php | grep "Hello world!" > /dev/null
         sudo rm test.php
-      shell: bash
+      shell: bash -e -v {0}
       working-directory: ${{ inputs.wp-abspath }}
 
     - name: Enable MySQL
       run: sudo systemctl start mysql.service
-      shell: bash
+      shell: bash -e -v {0}
 
     # https://make.wordpress.org/cli/handbook/guides/installing/
     - name: Install WP-CLI
@@ -104,7 +102,7 @@ runs:
         chmod +x wp-cli.phar
         sudo mv wp-cli.phar /usr/local/bin/wp
         wp --info
-      shell: bash -v {0}
+      shell: bash -e -v {0}
 
     - name: Setup WordPress
       run: |+
@@ -115,7 +113,7 @@ runs:
         sudo -u www-data wp core install --url=${{ inputs.wp-url }} --title=Test --admin_user=${{ inputs.wp-username }} --admin_password=${{ inputs.wp-password }} --admin_email=admin@wordpress.local --skip-email
         sudo -u www-data wp language core install ${{ inputs.wp-language }} --activate
         sudo -u www-data wp theme install classic --activate
-      shell: bash -v {0}
+      shell: bash -e -v {0}
       working-directory: ${{ inputs.wp-abspath }}
 
     # Check by WP-CLI.
@@ -124,15 +122,15 @@ runs:
         sudo -u www-data wp db check
         sudo -u www-data wp core is-installed
         sudo -u www-data wp core version
-      shell: bash -v {0}
+      shell: bash -e -v {0}
       working-directory: ${{ inputs.wp-abspath }}
 
     # Dump.
     - run: curl -sL ${{ inputs.wp-url }}
-      shell: bash -v {0}
+      shell: bash -e -v {0}
       continue-on-error: true
     - run: curl -sL ${{ inputs.wp-url }}wp-admin/
-      shell: bash -v {0}
+      shell: bash -e -v {0}
       continue-on-error: true
 
     # Check.
@@ -141,7 +139,7 @@ runs:
       run: |+
         curl -sL ${{ inputs.wp-url }} | grep "Hello world!" > /dev/null
         curl -sL ${{ inputs.wp-url }}wp-admin/ | grep "loginform" > /dev/null
-      shell: bash
+      shell: bash -e -v {0}
       continue-on-error: true
     - run: |+
         # Enable debug mode to get more error details.
@@ -159,5 +157,5 @@ runs:
         # Stop job with error.
         false
       if: ${{ steps.is-wordpress-working.outcome == 'failure' }}
-      shell: bash -v {0}
+      shell: bash -e -v {0}
       working-directory: ${{ inputs.wp-abspath }}
