@@ -57,10 +57,18 @@ runs:
       shell: bash -e -v {0}
       continue-on-error: true
 
+    - name: Strip PHP patch version and store env
+      uses: actions/github-script@v9
+      with:
+        script: |+
+          const phpVersion = '${{ steps.setup-php.outputs.php-version }}';
+          const phpVersionShort = phpVersion.split('.').slice(0, 2).join('.');
+          core.exportVariable('PHP_VERSION_SHORT', phpVersionShort);
+
     - name: Configure Apache
       run: |
         sudo a2enmod proxy_fcgi setenvif rewrite ssl
-        sudo a2enconf php${{ steps.setup-php.outputs.php-version }}-fpm
+        sudo a2enconf php${{ env.PHP_VERSION_SHORT }}-fpm
         sudo a2ensite default-ssl
         cat <<EOF | sudo tee /etc/apache2/conf-available/wordpress.conf
         <Directory ${{ inputs.wp-abspath }}>
